@@ -28,3 +28,12 @@ windhawk/discord_bridge.before-*.h
 windhawk/discord_bridge.h.before-*
 *.before-crlf-fix
 *.bak
+
+# Historical development scripts and machine-local patch installers
+windhawk/*.py
+windhawk/*.txt
+windhawk/install-*.ps1
+agent/diag_*.py
+backend/diag_*.py
+backend/start-docker-service.ps1
+backend/docker-service-result.txt
