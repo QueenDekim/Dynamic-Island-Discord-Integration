@@ -67,6 +67,9 @@ bool DIDiscordReadSnapshot(DiscordSnapshot* next) {
             member.avatar = DIDiscordReadImage(DIBBridgeUtf8(parts[11 + i * 2]));
             next->members.push_back(std::move(member));
         }
+        const size_t channelIdField = static_cast<size_t>(10 + count * 2);
+        if (parts.size() > channelIdField)
+            next->channelId = DIBBridgeUtf8(parts[channelIdField]);
     } catch (...) {
         return false;
     }
@@ -171,7 +174,12 @@ bool DIDiscordTakeNotification(NotificationSnapshot* output) {
     output->app = L"Discord";
     output->title = DIBBridgeUtf8(lines[2]);
     output->body = DIBBridgeUtf8(lines[3]);
-    output->icon = FindAppIconByName(L"Discord", 32);
+    // The notification's optional sixth field is a cached sender avatar.
+    // Older agents don't send it; retain the app icon as a fallback.
+    if (lines.size() >= 6 && !lines[5].empty())
+        output->icon = DIDiscordReadImage(DIBBridgeUtf8(lines[5]));
+    if (output->icon.bgra.empty())
+        output->icon = FindAppIconByName(L"Discord", 32);
     output->expiresAt = NowSeconds() + 5.0;
     return true;
 }
@@ -189,6 +197,9 @@ DWORD WINAPI DiscordThreadProc(void*) {
             enabled = g_settings.discord;
         }
         if (!enabled) {
+            g_discordProcessRunning.store(false, std::memory_order_relaxed);
+            g_discordVoiceActive.store(false, std::memory_order_relaxed);
+            g_discordAutoExpandUntil.store(0.0, std::memory_order_relaxed);
             DIDiscordIsolatedAudioLevel(false);
             continue;
         }
@@ -197,20 +208,41 @@ DWORD WINAPI DiscordThreadProc(void*) {
         if (now - lastStatePoll >= 1200) {
             lastStatePoll = now;
             DiscordSnapshot update;
-            const bool connected = DIDiscordReadSnapshot(&update);
+            const bool processRunning = DIDiscordRootProcessId() != 0;
+            const bool connected = processRunning && DIDiscordReadSnapshot(&update);
+            update.connected = connected;
             DIDiscordReadStatus(&update);
             NotificationSnapshot notice;
-            const bool haveNotice = DIDiscordTakeNotification(&notice);
-            std::lock_guard lock(g_stateMutex);
-            // Audio samples survive metadata polling and remain independent
-            // from the browser/media waveform.
-            update.waveform = g_state.discord.waveform;
-            update.waveformWrite = g_state.discord.waveformWrite;
-            g_state.discord = std::move(update);
-            if (haveNotice) {
-                g_state.notification = std::move(notice);
-                TriggerNudge();
+            const bool haveNotice = processRunning && DIDiscordTakeNotification(&notice);
+            bool voiceChanged = false;
+            {
+                std::lock_guard lock(g_stateMutex);
+                const auto& previous = g_state.discord;
+                voiceChanged = connected &&
+                    (!previous.connected ||
+                     (update.channelId != previous.channelId &&
+                      (!update.channelId.empty() || !previous.channelId.empty())) ||
+                     (update.channelId.empty() && previous.channelId.empty() &&
+                      (update.joinedUnix != previous.joinedUnix ||
+                       update.guildName != previous.guildName ||
+                       update.channelName != previous.channelName)));
+                // Preserve process-isolated audio during metadata refresh.
+                update.waveform = previous.waveform;
+                update.waveformWrite = previous.waveformWrite;
+                g_state.discord = std::move(update);
+                if (haveNotice)
+                    g_state.notification = std::move(notice);
             }
+            g_discordProcessRunning.store(processRunning, std::memory_order_relaxed);
+            g_discordVoiceActive.store(connected, std::memory_order_relaxed);
+            if (voiceChanged) {
+                g_discordAutoExpandUntil.store(NowSeconds() + 5.0,
+                                               std::memory_order_relaxed);
+                TriggerNudge();
+            } else if (!connected) {
+                g_discordAutoExpandUntil.store(0.0, std::memory_order_relaxed);
+            }
+            if (haveNotice) TriggerNudge();
             g_layoutDirty = true;
         }
         if (now - lastAudioPoll >= 35) {

@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import time
+from notification_avatar import cached_notification_avatar
 
 BASE = Path(os.environ["LOCALAPPDATA"]) / "DynamicIslandDiscord"
 STATUS = BASE / "status.tsv"
@@ -41,7 +42,7 @@ def pop_command():
     return lines[1]
 
 
-def publish_notification(payload):
+def publish_notification(payload, avatar_cache=None):
     if not isinstance(payload, dict):
         return
     message = payload.get("message") or {}
@@ -52,5 +53,6 @@ def publish_notification(payload):
     body = field(payload.get("body") or message.get("content") or "", 700)
     if not title and not body:
         return
+    sender_avatar = cached_notification_avatar(payload, avatar_cache) if avatar_cache else ""
     atomic_lines(NOTICE, ["DISCORDNOTIFY1", identifier, title, body,
-                          str(int(time.time()))])
+                          str(int(time.time())), sender_avatar])

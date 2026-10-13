@@ -206,7 +206,7 @@ def main():
                     except queue.Empty:
                         break
                     if evt.get("evt") == "NOTIFICATION_CREATE":
-                        publish_notification(evt.get("data", {}))
+                        publish_notification(evt.get("data", {}), ASSETS)
 
                 if now >= next_poll:
                     next_poll = now + 4.0

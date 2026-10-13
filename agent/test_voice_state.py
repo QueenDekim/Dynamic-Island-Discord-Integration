@@ -29,4 +29,5 @@ with tempfile.TemporaryDirectory() as folder:
     assert lines[2:4] == ["Тестовый сервер", "Голосовой канал"]
     assert lines[5:8] == ["2", "0", "1"]
     assert lines[9] == "2"
+    assert lines[14] == channel["id"], "stable channel ID must follow participant pairs"
 print("PASS Discord RPC voice snapshot: names, participants, timer anchor, microphone state, UTF-8 wire format")

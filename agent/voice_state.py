@@ -57,7 +57,7 @@ def download_icon(url: str, output: Path) -> bool:
         "cdn.discordapp.com", "media.discordapp.net"
     ):
         return False
-    if not parsed.path.startswith(("/avatars/", "/icons/")):
+    if not parsed.path.startswith(("/avatars/", "/embed/avatars/", "/icons/")):
         return False
     try:
         req = Request(url, headers={"User-Agent": "DynamicIslandDiscord/1.0"})
@@ -122,6 +122,9 @@ def write_windhawk_tsv(state: dict, destination: Path) -> None:
     for person in participants:
         lines.extend([field(person.get("name", "")),
                       field(person.get("avatar_file", ""))])
+    # Optional extension after participant pairs; older readers ignore it.
+    # Unlike a channel name, a snowflake ID identifies channel switches reliably.
+    lines.append(field(state.get("channel_id", "")))
     destination.parent.mkdir(parents=True, exist_ok=True)
     staging = destination.with_suffix(".new")
     staging.write_bytes(("\n".join(lines) + "\n").encode("utf-8"))
