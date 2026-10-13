@@ -1,0 +1,11 @@
+services:
+  discord-oauth:
+    build: .
+    env_file:
+      - .env
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "0.0.0.0:18080:8080"

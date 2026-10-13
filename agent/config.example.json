@@ -1,0 +1,8 @@
+{
+  "client_id": "1559606305025556480",
+  "backend_url": "https://ddii.dekimdev.ru",
+  "bridge_api_key": "REPLACE_WITH_BACKEND_BRIDGE_API_KEY",
+  "redirect_uri": "https://ddii.dekimdev.ru/oauth/callback",
+  "enable_notifications": true,
+  "poll_seconds": 4
+}

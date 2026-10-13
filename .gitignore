@@ -1,0 +1,30 @@
+# Never publish credentials or local OAuth state
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+**/config.json
+**/oauth*.dpapi
+**/*.dpapi
+**/*.token
+**/tokens.json
+**/secrets.json
+*.log
+*.tmp
+*.pid
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+# Earlier one-off Windhawk builds, compiler tests, and machine-specific backups
+windhawk/*.wh.cpp
+windhawk/integration-stage*.cpp
+windhawk/*.exe
+windhawk/*result*.txt
+windhawk/discord_bridge.before-*.h
+windhawk/discord_bridge.h.before-*
+*.before-crlf-fix
+*.bak
