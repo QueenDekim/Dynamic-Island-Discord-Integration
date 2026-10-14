@@ -4,8 +4,22 @@ import hashlib
 import json
 from pathlib import Path
 import time
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
+
+
+def parse_voice_start_time(value) -> int:
+    """Server-provided Discord voice session origin, not local RPC poll time."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return int(value / 1000 if value > 10**11 else value) if value > 0 else 0
+    if isinstance(value, str) and value:
+        try:
+            return max(0, int(datetime.fromisoformat(
+                value.replace("Z", "+00:00")).timestamp()))
+        except ValueError:
+            return 0
+    return 0
 
 
 def normalize(channel: dict | None, guild: dict | None, settings: dict | None,
@@ -35,10 +49,19 @@ def normalize(channel: dict | None, guild: dict | None, settings: dict | None,
             "speaking": False,
         })
 
+    # The Discord UI's green channel timer measures voice session uptime.
+    # Legacy desktop RPC may omit voice_start_time: never invent a value.
+    start = parse_voice_start_time(channel.get("voice_start_time") or
+                                   channel.get("voice_start_timestamp") or
+                                   channel.get("voice_started_at"))
+    if not start and isinstance(channel.get("voice_start_times"), dict):
+        start = parse_voice_start_time(
+            channel["voice_start_times"].get(str(channel["id"])))
     return {
         "connected": True,
         "updated_unix": now,
         "joined_unix": joined_at or now,
+        "voice_started_unix": start,
         "guild_id": str(channel.get("guild_id") or ""),
         "guild_name": str(guild.get("name") or "Discord")[:128],
         "guild_icon_url": str(guild.get("icon_url") or "").replace(".webp", ".png")[:1024],
@@ -125,6 +148,8 @@ def write_windhawk_tsv(state: dict, destination: Path) -> None:
     # Optional extension after participant pairs; older readers ignore it.
     # Unlike a channel name, a snowflake ID identifies channel switches reliably.
     lines.append(field(state.get("channel_id", "")))
+    # Optional server-authoritative channel session timestamp.
+    lines.append(str(int(state.get("voice_started_unix") or 0)))
     destination.parent.mkdir(parents=True, exist_ok=True)
     staging = destination.with_suffix(".new")
     staging.write_bytes(("\n".join(lines) + "\n").encode("utf-8"))

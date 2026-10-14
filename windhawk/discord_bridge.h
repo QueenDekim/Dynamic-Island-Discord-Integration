@@ -70,6 +70,9 @@ bool DIDiscordReadSnapshot(DiscordSnapshot* next) {
         const size_t channelIdField = static_cast<size_t>(10 + count * 2);
         if (parts.size() > channelIdField)
             next->channelId = DIBBridgeUtf8(parts[channelIdField]);
+        if (parts.size() > channelIdField + 1)
+            next->voiceStartedUnix = std::max(int64_t{0},
+                std::stoll(parts[channelIdField + 1]));
     } catch (...) {
         return false;
     }
@@ -200,7 +203,7 @@ DWORD WINAPI DiscordThreadProc(void*) {
             g_discordProcessRunning.store(false, std::memory_order_relaxed);
             g_discordVoiceActive.store(false, std::memory_order_relaxed);
             g_discordAutoExpandUntil.store(0.0, std::memory_order_relaxed);
-            DIDiscordIsolatedAudioLevel(false);
+            DIDiscordIsolatedAudioLevels(false);
             continue;
         }
 
@@ -254,23 +257,25 @@ DWORD WINAPI DiscordThreadProc(void*) {
             }
             // Process-loopback handles capture lifecycle, returning zero when
             // Discord is not on a call. No system-wide metering fallback.
-            const float rms = DIDiscordIsolatedAudioLevel(activeCall);
+            const auto levels = DIDiscordIsolatedAudioLevels(activeCall);
             if (!activeCall) continue;
             std::lock_guard lock(g_stateMutex);
             auto& voice = g_state.discord;
-            const size_t size = voice.waveform.size();
-            const float previous = voice.waveformWrite
-                ? voice.waveform[(voice.waveformWrite - 1) % size] : 0.0f;
-            // Match the media module attack/release envelope.
-            const float smoothed = rms > previous
-                ? previous * 0.30f + rms * 0.70f
-                : previous * 0.85f + rms * 0.15f;
-            voice.waveform[voice.waveformWrite % size] = smoothed;
+            // One window per displayed bar: actual PCM energy only.
+            // Smooth each column independently using media's attack/release.
+            for (size_t i = 0; i < levels.size(); ++i) {
+                const size_t slot = i;
+                const float previous = voice.waveform[slot];
+                const float level = levels[i];
+                voice.waveform[slot] = level > previous
+                    ? previous * 0.30f + level * 0.70f
+                    : previous * 0.85f + level * 0.15f;
+            }
             ++voice.waveformWrite;
             g_layoutDirty = true;
         }
     }
-    DIDiscordIsolatedAudioLevel(false); // Stop WASAPI before COM uninitialization.
+    DIDiscordIsolatedAudioLevels(false); // Stop WASAPI before COM uninitialization.
     winrt::uninit_apartment();
     return 0;
 }

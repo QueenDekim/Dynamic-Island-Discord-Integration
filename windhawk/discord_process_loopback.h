@@ -190,9 +190,11 @@ public:
 
     DWORD pid() const { return pid_; }
 
-    float ReadRms() {
-        if (!capture_) return 0.0f;
-        double sum = 0.0;
+    std::array<float, 8> ReadLevels() {
+        std::array<float, 8> levels{};
+        if (!capture_) return levels;
+        std::array<double, 8> sums{};
+        std::array<uint64_t, 8> counts{};
         uint64_t framesTotal = 0;
         UINT32 packet = 0;
         HRESULT hr = capture_->GetNextPacketSize(&packet);
@@ -205,9 +207,16 @@ public:
             if (FAILED(hr)) break;
             if (samples && !(flags & AUDCLNT_BUFFERFLAGS_SILENT)) {
                 const int16_t* pcm = reinterpret_cast<const int16_t*>(samples);
-                for (uint64_t i = 0; i < static_cast<uint64_t>(frames) * 2; ++i) {
-                    const double x = pcm[i] / 32768.0;
-                    sum += x * x;
+                // Eight independent, consecutive audio windows per capture.
+                // No synthesized oscillation, randomness, or phase animation.
+                constexpr uint64_t kFramesPerWindow = 192;
+                for (uint64_t i = 0; i < frames; ++i) {
+                    const size_t bin = static_cast<size_t>(
+                        ((framesTotal + i) / kFramesPerWindow) % sums.size());
+                    const double left = pcm[i * 2] / 32768.0;
+                    const double right = pcm[i * 2 + 1] / 32768.0;
+                    sums[bin] += left * left + right * right;
+                    counts[bin] += 2;
                 }
             }
             framesTotal += frames;
@@ -216,18 +225,17 @@ public:
         }
         if (FAILED(hr)) {
             Stop();
-            return 0.0f;
+            return levels;
         }
-        // Give quiet speech a useful visual range; unlike GetPeakValue,
-        // this is calculated exclusively from the selected process audio.
-        const double rms = framesTotal ? std::sqrt(sum / (framesTotal * 2)) : 0.0;
-        // Voice is usually much quieter than music. Expand soft speech with a
-        // perceptual curve, but gate the WASAPI noise floor to keep silence flat.
-        // ~0.002 RMS -> 0.41; ~0.006 RMS -> 0.83; >=0.009 RMS -> full height.
         constexpr double kNoiseFloor = 0.0006;
         constexpr double kVoiceGain = 120.0;
-        const double normalized = std::clamp((rms - kNoiseFloor) * kVoiceGain, 0.0, 1.0);
-        return static_cast<float>(std::sqrt(normalized));
+        for (size_t i = 0; i < levels.size(); ++i) {
+            const double rms = counts[i] ? std::sqrt(sums[i] / counts[i]) : 0.0;
+            const double normalized = std::clamp(
+                (rms - kNoiseFloor) * kVoiceGain, 0.0, 1.0);
+            levels[i] = static_cast<float>(std::sqrt(normalized));
+        }
+        return levels;
     }
 private:
     DWORD pid_ = 0;
@@ -235,7 +243,7 @@ private:
     ComPtr<IAudioCaptureClient> capture_;
 };
 
-float DIDiscordIsolatedAudioLevel(bool inCall) {
+std::array<float, 8> DIDiscordIsolatedAudioLevels(bool inCall) {
     static DIDiscordProcessCapture recorder;
     static ULONGLONG nextPidSearch = 0;
     static ULONGLONG nextCaptureRetry = 0;
@@ -245,7 +253,7 @@ float DIDiscordIsolatedAudioLevel(bool inCall) {
         targetPid = 0;
         nextPidSearch = 0;
         nextCaptureRetry = 0;
-        return 0.0f;
+        return {};
     }
     const ULONGLONG now = GetTickCount64();
 
@@ -255,17 +263,17 @@ float DIDiscordIsolatedAudioLevel(bool inCall) {
     }
     if (!targetPid) {
         recorder.Stop();
-        return 0.0f;
+        return {};
     }
     if (recorder.pid() != targetPid) {
         // Failed activations can take seconds; don't retry each 35ms tick.
-        if (now < nextCaptureRetry) return 0.0f;
+        if (now < nextCaptureRetry) return {};
         if (!recorder.Start(targetPid)) {
             // No fallback to endpoint/session-wide audio.
             nextCaptureRetry = GetTickCount64() + 5000;
-            return 0.0f;
+            return {};
         }
         nextCaptureRetry = 0;
     }
-    return recorder.ReadRms();
+    return recorder.ReadLevels();
 }
