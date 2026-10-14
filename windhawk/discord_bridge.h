@@ -267,10 +267,12 @@ DWORD WINAPI DiscordThreadProc(void*) {
             for (size_t i = 0; i < levels.size(); ++i) {
                 const float previous = voice.waveform[i];
                 const float level = levels[i];
-                // Same attack/release coefficients as PushWaveformSample.
+                // Twice the response rate in continuous-time terms:
+                // compose the prior EMA update with itself (not 2x the
+                // coefficient, which would exceed 100% on attack).
                 voice.waveform[i] = level > previous
-                    ? previous * 0.30f + level * 0.70f
-                    : previous * 0.85f + level * 0.15f;
+                    ? previous * 0.09f + level * 0.91f
+                    : previous * 0.7225f + level * 0.2775f;
             }
             ++voice.waveformWrite;
             g_layoutDirty = true;

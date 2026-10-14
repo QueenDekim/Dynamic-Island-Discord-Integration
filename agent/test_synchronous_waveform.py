@@ -18,5 +18,6 @@ assert "voice.waveform[voice.waveformWrite %" not in update
 assert "++voice.waveformWrite;" in update
 assert "lastAudioPoll >= 16" in bridge
 assert "WaitForSingleObject(g_stopEvent, 16)" in bridge
-assert "previous * 0.85f + level * 0.15f" in update
+assert "previous * 0.09f + level * 0.91f" in update
+assert "previous * 0.7225f + level * 0.2775f" in update
 print("SYNCHRONOUS_DISCORD_BARS_OK")
