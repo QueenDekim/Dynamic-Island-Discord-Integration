@@ -227,13 +227,18 @@ public:
             Stop();
             return levels;
         }
-        constexpr double kNoiseFloor = 0.0006;
-        constexpr double kVoiceGain = 120.0;
+        // Speech has a wide dynamic range. The previous *120 gain followed
+        // by sqrt and a hard clamp saturated at ~0.009 RMS, making all bars
+        // stick to full height even during ordinary conversation.
+        // A soft-knee curve preserves differences between quiet/loud speech
+        // without ever clipping a finite RMS sample to 1.
+        constexpr double kNoiseFloor = 0.001;
+        constexpr double kHalfScaleRms = 0.055;
         for (size_t i = 0; i < levels.size(); ++i) {
             const double rms = counts[i] ? std::sqrt(sums[i] / counts[i]) : 0.0;
-            const double normalized = std::clamp(
-                (rms - kNoiseFloor) * kVoiceGain, 0.0, 1.0);
-            levels[i] = static_cast<float>(std::sqrt(normalized));
+            const double signal = std::max(0.0, rms - kNoiseFloor);
+            levels[i] = static_cast<float>(
+                signal / (signal + kHalfScaleRms));
         }
         return levels;
     }
