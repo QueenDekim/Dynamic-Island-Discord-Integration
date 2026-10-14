@@ -4,13 +4,15 @@ import math
 
 src = (Path(__file__).resolve().parents[1] / "windhawk" /
        "discord_process_loopback.h").read_text(encoding="utf-8")
-assert "kHalfScaleRms = 0.055" in src
+assert "kHalfScaleRms = 0.085" in src
+assert "kFramesPerWindow = 640" in src
+assert "(raw[i] - mean) * 2.2" in src
 assert "signal / (signal + kHalfScaleRms)" in src
 assert "kVoiceGain = 120.0" not in src
 
 def level(rms):
     signal = max(0.0, rms - 0.001)
-    return signal / (signal + 0.055)
+    return signal / (signal + 0.085)
 
 assert level(0) == 0
 assert level(0.0008) == 0
