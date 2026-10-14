@@ -261,18 +261,17 @@ DWORD WINAPI DiscordThreadProc(void*) {
             if (!activeCall) continue;
             std::lock_guard lock(g_stateMutex);
             auto& voice = g_state.discord;
-            // Same waveform pipeline as media: append sequential PCM
-            // amplitudes to a ring buffer with identical attack/release EMA.
-            for (const float level : levels) {
-                const size_t size = voice.waveform.size();
-                const float previous = voice.waveformWrite
-                    ? voice.waveform[(voice.waveformWrite - 1) % size] : 0.0f;
-                const float smoothed = level > previous
+            // Eight current PCM levels update all bars in the SAME frame.
+            // Each bar has its own envelope: no time-shifted ring-buffer
+            // indexing and no movement from right to left.
+            for (size_t i = 0; i < levels.size(); ++i) {
+                const float previous = voice.waveform[i];
+                const float level = levels[i];
+                voice.waveform[i] = level > previous
                     ? previous * 0.30f + level * 0.70f
                     : previous * 0.85f + level * 0.15f;
-                voice.waveform[voice.waveformWrite % size] = smoothed;
-                ++voice.waveformWrite;
             }
+            ++voice.waveformWrite;
             g_layoutDirty = true;
         }
     }
