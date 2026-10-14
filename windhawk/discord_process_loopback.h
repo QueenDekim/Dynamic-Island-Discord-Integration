@@ -226,17 +226,13 @@ public:
             Stop();
             return levels;
         }
-        // Speech has a wide dynamic range. The previous *120 gain followed
-        // by sqrt and a hard clamp saturated at ~0.009 RMS, making all bars
-        // stick to full height even during ordinary conversation.
-        // A soft-knee curve preserves differences between quiet/loud speech
-        // without ever clipping a finite RMS sample to 1.
-        constexpr double kNoiseFloor = 0.001;
-        constexpr double kHalfScaleRms = 0.085;
+        // Identical RMS-to-amplitude mapping as the main Media module:
+        // PushAudioChunks uses Clamp(sqrt(sum / samples) * 4, 0, 1).
+        // Retain eight simultaneous bins rather than Media's scrolling
+        // history; each bar represents fresh process-isolated Discord PCM.
         for (size_t i = 0; i < levels.size(); ++i) {
             const double rms = counts[i] ? std::sqrt(sums[i] / counts[i]) : 0.0;
-            const double signal = std::max(0.0, rms - kNoiseFloor);
-            levels[i] = static_cast<float>(signal / (signal + kHalfScaleRms));
+            levels[i] = std::clamp(static_cast<float>(rms * 4.0), 0.0f, 1.0f);
         }
         return levels;
     }

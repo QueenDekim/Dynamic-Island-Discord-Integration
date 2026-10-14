@@ -1,25 +1,16 @@
-"""Regression: Discord RMS bars must not saturate during ordinary speech."""
+"""Regression checks: Discord uses the exact Media PCM RMS mapping."""
 from pathlib import Path
-import math
-
-src = (Path(__file__).resolve().parents[1] / "windhawk" /
-       "discord_process_loopback.h").read_text(encoding="utf-8")
-assert "kHalfScaleRms = 0.085" in src
+src=(Path(__file__).resolve().parents[1]/"windhawk"/"discord_process_loopback.h").read_text(encoding="utf-8")
 assert "i * sums.size() / frames" in src
+assert "std::sqrt(sums[i] / counts[i])" in src
+assert "rms * 4.0" in src
+assert "kHalfScaleRms" not in src
+assert "kVoiceGain" not in src
 assert "kFramesPerWindow" not in src
-assert "(raw[i] - mean) * 2.2" not in src
-assert "signal / (signal + kHalfScaleRms)" in src
-assert "kVoiceGain = 120.0" not in src
-
-def level(rms):
-    signal = max(0.0, rms - 0.001)
-    return signal / (signal + 0.085)
-
-assert level(0) == 0
-assert level(0.0008) == 0
-values = [level(x) for x in (0.002, 0.008, 0.02, 0.06, 0.12, 0.3)]
-assert all(0 < a < b < 1 for a,b in zip(values, values[1:]))
-assert level(0.02) < 0.3
-assert level(0.06) < 0.6
-assert level(0.12) < 0.7
-print("DISCORD_RMS_SOFT_KNEE_OK", [round(v,3) for v in values])
+for frames in (8, 64, 128, 256, 960, 4800):
+    bins=[0]*8
+    for i in range(frames):
+        bins[min(7,i*8//frames)] += 1
+    assert min(bins)>0, (frames,bins)
+assert [min(1.0,rms*4) for rms in (0,.01,.1,.25)]==[0,.04,.4,1.0]
+print("DISCORD_MEDIA_RMS_MAPPING_OK")
