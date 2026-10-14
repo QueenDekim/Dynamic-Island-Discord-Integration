@@ -211,7 +211,7 @@ public:
                 // No synthesized oscillation, randomness, or phase animation.
                 // Longer contiguous windows capture speech syllable dynamics
                 // instead of making every column average the whole packet.
-                constexpr uint64_t kFramesPerWindow = 640;
+                constexpr uint64_t kFramesPerWindow = 240;
                 for (uint64_t i = 0; i < frames; ++i) {
                     const size_t bin = static_cast<size_t>(
                         ((framesTotal + i) / kFramesPerWindow) % sums.size());
@@ -235,21 +235,11 @@ public:
         // A soft-knee curve preserves differences between quiet/loud speech
         // without ever clipping a finite RMS sample to 1.
         constexpr double kNoiseFloor = 0.001;
-        constexpr double kHalfScaleRms = 0.085; // less overall sensitivity
-        std::array<double, 8> raw{};
-        double mean = 0.0;
+        constexpr double kHalfScaleRms = 0.085;
         for (size_t i = 0; i < levels.size(); ++i) {
             const double rms = counts[i] ? std::sqrt(sums[i] / counts[i]) : 0.0;
             const double signal = std::max(0.0, rms - kNoiseFloor);
-            raw[i] = signal / (signal + kHalfScaleRms);
-            mean += raw[i];
-        }
-        mean /= levels.size();
-        for (size_t i = 0; i < levels.size(); ++i) {
-            // Center the contrast on the measured frame's mean; no procedural
-            // pattern. Quiet windows shrink, strong windows retain their peaks.
-            levels[i] = static_cast<float>(std::clamp(
-                mean + (raw[i] - mean) * 2.2, 0.0, 0.88));
+            levels[i] = static_cast<float>(signal / (signal + kHalfScaleRms));
         }
         return levels;
     }
