@@ -232,7 +232,7 @@ public:
         // history; each bar represents fresh process-isolated Discord PCM.
         for (size_t i = 0; i < levels.size(); ++i) {
             const double rms = counts[i] ? std::sqrt(sums[i] / counts[i]) : 0.0;
-            levels[i] = std::clamp(static_cast<float>(rms * 4.0), 0.0f, 1.0f);
+            levels[i] = std::clamp(static_cast<float>(rms * 5.0), 0.0f, 1.0f);
         }
         return levels;
     }
