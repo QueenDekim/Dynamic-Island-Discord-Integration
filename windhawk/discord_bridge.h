@@ -193,7 +193,7 @@ DWORD WINAPI DiscordThreadProc(void*) {
     winrt::init_apartment(winrt::apartment_type::multi_threaded);
     ULONGLONG lastStatePoll = 0;
     ULONGLONG lastAudioPoll = 0;
-    while (WaitForSingleObject(g_stopEvent, 35) == WAIT_TIMEOUT) {
+    while (WaitForSingleObject(g_stopEvent, 16) == WAIT_TIMEOUT) {
         bool enabled = true;
         {
             std::lock_guard lock(g_settingsMutex);
@@ -248,7 +248,7 @@ DWORD WINAPI DiscordThreadProc(void*) {
             if (haveNotice) TriggerNudge();
             g_layoutDirty = true;
         }
-        if (now - lastAudioPoll >= 35) {
+        if (now - lastAudioPoll >= 16) {
             lastAudioPoll = now;
             bool activeCall = false;
             {
@@ -268,8 +268,8 @@ DWORD WINAPI DiscordThreadProc(void*) {
                 const float previous = voice.waveform[i];
                 const float level = levels[i];
                 voice.waveform[i] = level > previous
-                    ? previous * 0.30f + level * 0.70f
-                    : previous * 0.85f + level * 0.15f;
+                    ? previous * 0.18f + level * 0.82f
+                    : previous * 0.60f + level * 0.40f;
             }
             ++voice.waveformWrite;
             g_layoutDirty = true;

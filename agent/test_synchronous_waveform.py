@@ -16,4 +16,7 @@ update=bridge[start:end]
 assert "voice.waveform[i] = level > previous" in update
 assert "voice.waveform[voice.waveformWrite %" not in update
 assert "++voice.waveformWrite;" in update
+assert "lastAudioPoll >= 16" in bridge
+assert "WaitForSingleObject(g_stopEvent, 16)" in bridge
+assert "previous * 0.60f + level * 0.40f" in update
 print("SYNCHRONOUS_DISCORD_BARS_OK")
