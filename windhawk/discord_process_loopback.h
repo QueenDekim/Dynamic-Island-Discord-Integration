@@ -195,7 +195,6 @@ public:
         if (!capture_) return levels;
         std::array<double, 8> sums{};
         std::array<uint64_t, 8> counts{};
-        uint64_t framesTotal = 0;
         UINT32 packet = 0;
         HRESULT hr = capture_->GetNextPacketSize(&packet);
         int packets = 0;
@@ -207,21 +206,19 @@ public:
             if (FAILED(hr)) break;
             if (samples && !(flags & AUDCLNT_BUFFERFLAGS_SILENT)) {
                 const int16_t* pcm = reinterpret_cast<const int16_t*>(samples);
-                // Eight independent, consecutive audio windows per capture.
-                // No synthesized oscillation, randomness, or phase animation.
-                // Longer contiguous windows capture speech syllable dynamics
-                // instead of making every column average the whole packet.
-                constexpr uint64_t kFramesPerWindow = 240;
+                // Partition EACH packet into eight equal relative windows.
+                // Previously 240 frames per bin left the final columns empty
+                // when a typical WASAPI poll provided fewer than 1920 frames.
+                // The eight bars update as one snapshot; no scrolling history.
                 for (uint64_t i = 0; i < frames; ++i) {
-                    const size_t bin = static_cast<size_t>(
-                        ((framesTotal + i) / kFramesPerWindow) % sums.size());
+                    const size_t bin = static_cast<size_t>(std::min<uint64_t>(
+                        sums.size() - 1, i * sums.size() / frames));
                     const double left = pcm[i * 2] / 32768.0;
                     const double right = pcm[i * 2 + 1] / 32768.0;
                     sums[bin] += left * left + right * right;
                     counts[bin] += 2;
                 }
             }
-            framesTotal += frames;
             capture_->ReleaseBuffer(frames);
             hr = capture_->GetNextPacketSize(&packet);
         }

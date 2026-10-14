@@ -5,7 +5,8 @@ import math
 src = (Path(__file__).resolve().parents[1] / "windhawk" /
        "discord_process_loopback.h").read_text(encoding="utf-8")
 assert "kHalfScaleRms = 0.085" in src
-assert "kFramesPerWindow = 240" in src
+assert "i * sums.size() / frames" in src
+assert "kFramesPerWindow" not in src
 assert "(raw[i] - mean) * 2.2" not in src
 assert "signal / (signal + kHalfScaleRms)" in src
 assert "kVoiceGain = 120.0" not in src
